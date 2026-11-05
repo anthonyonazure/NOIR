@@ -27,6 +27,17 @@ object DeviceScan {
     private const val RESULT = "R "
     private const val PROGRESS = "P "
 
+    /** Every file NOIR ever writes on the phone. All of it lives in /data/local/tmp. */
+    private const val DEVICE_SCRIPT = "/data/local/tmp/noir_scan.sh"
+    private const val DEVICE_TARGETS = "/data/local/tmp/noir_targets.txt"
+    private const val DEVICE_DEX = "/data/local/tmp/noir_dex.bin"
+    private const val CLEANUP = "rm -f $DEVICE_SCRIPT $DEVICE_TARGETS $DEVICE_DEX"
+
+    /** Removes anything NOIR left on the phone, including leftovers from an interrupted run. */
+    fun cleanDevice(adb: Adb, serial: String) {
+        runCatching { adb.shell(serial, CLEANUP, timeoutSec = 30) }
+    }
+
     fun packagePaths(adb: Adb, serial: String): Map<String, String> {
         val out = adb.shell(serial, "pm list packages -f").output
         val map = HashMap<String, String>()
@@ -61,17 +72,43 @@ object DeviceScan {
             return urlsByPulling(adb, serial, targets, workDir, onProgress)
         }
 
+        // Clear leftovers from any earlier run that was interrupted.
+        cleanDevice(adb, serial)
+
+        // If the user hits Ctrl+C mid-scan, still wipe the phone on the way out.
+        val hook = Thread { cleanDevice(adb, serial) }
+        runCatching { Runtime.getRuntime().addShutdownHook(hook) }
+
+        val list = File(workDir, "targets.txt")
+        val script = File(workDir, "scan.sh")
+        try {
+            return deviceSideScan(adb, serial, targets, workDir, list, script, onProgress)
+        } finally {
+            cleanDevice(adb, serial)
+            list.delete()
+            script.delete()
+            runCatching { Runtime.getRuntime().removeShutdownHook(hook) }
+        }
+    }
+
+    private fun deviceSideScan(
+        adb: Adb,
+        serial: String,
+        targets: List<PackagePath>,
+        workDir: File,
+        list: File,
+        script: File,
+        onProgress: (Int, Int) -> Unit
+    ): Map<String, List<String>> {
         val result = HashMap<String, List<String>>()
         val pendingFallback = ArrayList<String>()
 
-        val list = File(workDir, "targets.txt")
         list.writeText(targets.joinToString("\n", postfix = "\n") { "${it.pkg} ${it.path}" })
 
-        val script = File(workDir, "scan.sh")
         script.writeText(
             """
             #!/system/bin/sh
-            TMP=/data/local/tmp/noir_dex.bin
+            TMP=$DEVICE_DEX
             while read p f; do
               # Explicit entry names: some vendor `unzip` builds do not expand 'classes*.dex'.
               : > ${'$'}TMP
@@ -89,19 +126,19 @@ object DeviceScan {
               fi
               rm -f ${'$'}TMP
               echo "P ${'$'}p"
-            done < /data/local/tmp/noir_targets.txt
+            done < $DEVICE_TARGETS
             echo "#DONE"
             """.trimIndent()
         )
 
-        adb.push(serial, script, "/data/local/tmp/noir_scan.sh")
-        adb.push(serial, list, "/data/local/tmp/noir_targets.txt")
+        adb.push(serial, script, DEVICE_SCRIPT)
+        adb.push(serial, list, DEVICE_TARGETS)
 
         var done = 0
         val total = targets.size
 
         val execution = adb.execStreaming(
-            listOf("-s", serial, "shell", "sh /data/local/tmp/noir_scan.sh"),
+            listOf("-s", serial, "shell", "sh $DEVICE_SCRIPT"),
             timeoutSec = 0
         ) { line ->
             when {
@@ -160,9 +197,11 @@ object DeviceScan {
             if (local.exists()) {
                 val found = runCatching { ApkScan.urls(local) }.getOrDefault(emptyList())
                 if (found.isNotEmpty()) result[target.pkg] = found
+                local.delete()
             }
             onProgress(index + 1, targets.size)
         }
+        apkDir.delete()
         return result
     }
 }
