@@ -8,6 +8,7 @@ package app.noir.core.platform
 import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
+import java.security.MessageDigest
 import java.util.zip.ZipFile
 
 /**
@@ -23,13 +24,18 @@ object Setup {
     const val ADB_WINDOWS = "https://dl.google.com/android/repository/platform-tools-latest-windows.zip"
     const val JADX_ZIP = "https://github.com/skylot/jadx/releases/download/v1.5.6/jadx-1.5.6.zip"
 
+    /** SHA-256 of jadx-1.5.6.zip as published on the GitHub release. */
+    const val JADX_SHA256 = "545ea2be9c242511bc145755cf4bda2485ade42966e096f8b4d3da2a230e8974"
+
     fun toolsDir(): File = File(System.getProperty("user.home"), ".noir/tools").apply { mkdirs() }
 
     fun download(url: String, dest: File, onProgress: (Long, Long) -> Unit = { _, _ -> }): Boolean {
         var current = URL(url)
         repeat(6) {
+            // Never follow a redirect off HTTPS.
+            if (!current.protocol.equals("https", ignoreCase = true)) return false
             val conn = current.openConnection() as HttpURLConnection
-            conn.instanceFollowRedirects = true
+            conn.instanceFollowRedirects = false
             conn.connectTimeout = 20_000
             conn.readTimeout = 120_000
             conn.setRequestProperty("User-Agent", "NOIR/0.1")
@@ -68,11 +74,30 @@ object Setup {
         return false
     }
 
+    fun sha256(file: File): String {
+        val digest = MessageDigest.getInstance("SHA-256")
+        file.inputStream().use { input ->
+            val buffer = ByteArray(64 * 1024)
+            while (true) {
+                val n = input.read(buffer)
+                if (n < 0) break
+                digest.update(buffer, 0, n)
+            }
+        }
+        return digest.digest().joinToString("") { "%02x".format(it) }
+    }
+
     fun unzip(zip: File, dest: File) {
         dest.mkdirs()
+        val root = dest.canonicalFile
         ZipFile(zip).use { archive ->
             archive.entries().asSequence().forEach { entry ->
                 val target = File(dest, entry.name)
+                // Refuse entries that would land outside the destination ("zip slip").
+                val canonical = target.canonicalFile
+                if (canonical != root && !canonical.path.startsWith(root.path + File.separator)) {
+                    throw SecurityException("Unsafe path in archive: ${entry.name}")
+                }
                 if (entry.isDirectory) {
                     target.mkdirs()
                 } else {
@@ -109,6 +134,10 @@ object Setup {
         val dir = File(toolsDir(), "jadx")
         val zip = File(toolsDir(), "jadx.zip")
         if (!download(JADX_ZIP, zip, onProgress)) return null
+        if (!sha256(zip).equals(JADX_SHA256, ignoreCase = true)) {
+            zip.delete()
+            return null
+        }
         unzip(zip, dir)
         zip.delete()
 
