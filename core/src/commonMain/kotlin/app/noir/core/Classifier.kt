@@ -6,24 +6,24 @@
 package app.noir.core
 
 enum class Category(val label: String) {
-    TELEMETRY("遥测/统计"),
-    ADS("广告"),
-    SECURITY("安全/杀毒"),
-    AI_VOICE("AI/语音"),
-    LOCATION("定位/地图"),
-    PUSH("推送"),
-    APP_STORE("应用商店"),
-    INPUT_METHOD("输入法"),
-    PAYMENT("支付"),
-    FINANCE("金融"),
-    SHOPPING("购物"),
-    MEDIA("影音"),
-    SOCIAL("社交"),
-    GAME("游戏"),
-    TOOL("工具"),
-    CARRIER("运营商"),
-    SYSTEM("系统"),
-    OTHER("其他")
+    TELEMETRY("Telemetry"),
+    ADS("Ads"),
+    SECURITY("Security"),
+    AI_VOICE("AI/Voice"),
+    LOCATION("Location"),
+    PUSH("Push"),
+    APP_STORE("App store"),
+    INPUT_METHOD("Keyboard"),
+    PAYMENT("Payment"),
+    FINANCE("Finance"),
+    SHOPPING("Shopping"),
+    MEDIA("Media"),
+    SOCIAL("Social"),
+    GAME("Game"),
+    TOOL("Tool"),
+    CARRIER("Carrier"),
+    SYSTEM("System"),
+    OTHER("Other")
 }
 
 /**

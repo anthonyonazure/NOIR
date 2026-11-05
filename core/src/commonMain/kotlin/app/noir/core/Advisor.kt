@@ -6,11 +6,11 @@
 package app.noir.core
 
 enum class ActionType(val label: String) {
-    APPOP_PROJECT_MEDIA("禁止录屏"),
-    APPOP_USAGE_STATS("禁止读取使用统计"),
-    UNINSTALL_USER("对当前用户卸载"),
-    REVIEW("人工复核"),
-    BLOCK_DNS("DNS 拦截")
+    APPOP_PROJECT_MEDIA("Block screen capture"),
+    APPOP_USAGE_STATS("Block usage stats"),
+    UNINSTALL_USER("Uninstall for current user"),
+    REVIEW("Manual review"),
+    BLOCK_DNS("DNS block")
 }
 
 data class Recommendation(
@@ -83,7 +83,7 @@ object Advisor {
                     app.pkg,
                     ActionType.APPOP_PROJECT_MEDIA,
                     "MED",
-                    "系统组件，声明了录屏能力且存在上报端点",
+                    "System component that declares screen capture and has reporting endpoints",
                     autoSafe = true
                 )
             }
@@ -96,7 +96,7 @@ object Advisor {
                     app.pkg,
                     ActionType.APPOP_USAGE_STATS,
                     "MED",
-                    "遥测类系统应用可读取应用使用统计",
+                    "Telemetry system app can read app usage stats",
                     autoSafe = true
                 )
             }
@@ -106,7 +106,7 @@ object Advisor {
                     app.pkg,
                     ActionType.REVIEW,
                     if (app.isSystem) "HIGH" else "MED",
-                    if (app.isSystem) "遥测/广告类系统组件，无法卸载，建议 DNS 层拦截" else "遥测/广告密度高，评估后决定是否保留",
+                    if (app.isSystem) "Telemetry/ads system component; can't be uninstalled, block at the DNS level" else "Heavy telemetry/ads; evaluate whether to keep it",
                     autoSafe = false
                 )
             }
@@ -118,7 +118,7 @@ object Advisor {
                     app.pkg,
                     ActionType.BLOCK_DNS,
                     "LOW",
-                    "存在多个上报端点，可在 DNS 层拦截",
+                    "Multiple reporting endpoints; can be blocked at the DNS level",
                     autoSafe = false
                 )
             }

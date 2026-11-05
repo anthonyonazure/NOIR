@@ -2,18 +2,18 @@ package app.noir.core
 
 /** What kind of user data a permission can expose, independent of the app. */
 enum class DataType(val label: String) {
-    LOCATION("位置"),
-    CONTACTS("通讯录"),
-    SMS("短信"),
-    CALLS("通话记录"),
-    MIC("麦克风"),
-    CAMERA("相机"),
-    SCREEN("屏幕"),
-    APPS("应用列表"),
-    IDENTITY("设备标识"),
-    FILES("文件/相册"),
-    CALENDAR("日历"),
-    ACCOUNTS("账号")
+    LOCATION("Location"),
+    CONTACTS("Contacts"),
+    SMS("SMS"),
+    CALLS("Call log"),
+    MIC("Microphone"),
+    CAMERA("Camera"),
+    SCREEN("Screen"),
+    APPS("App list"),
+    IDENTITY("Device IDs"),
+    FILES("Files/Photos"),
+    CALENDAR("Calendar"),
+    ACCOUNTS("Accounts")
 }
 
 /**

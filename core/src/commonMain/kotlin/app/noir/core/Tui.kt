@@ -134,7 +134,7 @@ object Tui {
             )
         }
         if (uncategorised > 0) {
-            line("  ${s.dim(padRight("未分类", 12))}  ${s.dim("· ".repeat(13))}  ${s.dim(padLeft(uncategorised.toString(), 4))}")
+            line("  ${s.dim(padRight("Unsorted", 12))}  ${s.dim("· ".repeat(13))}  ${s.dim(padLeft(uncategorised.toString(), 4))}")
         }
         line()
 
