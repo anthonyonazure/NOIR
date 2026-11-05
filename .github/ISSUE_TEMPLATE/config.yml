@@ -4,5 +4,5 @@ contact_links:
     url: https://github.com/Verlintas/NOIR/security/advisories/new
     about: Please do not open a public issue for vulnerabilities in NOIR itself.
   - name: How to enable USB debugging
-    url: https://github.com/Verlintas/NOIR#第一次运行
+    url: https://github.com/anthonyonazure/NOIR#first-run
     about: Device not detected? Start here.
