@@ -28,7 +28,8 @@ data class Recommendation(
  *  - screen-capture is only flagged on system components that also ship upload
  *    endpoints, never on apps where screen sharing is a real feature;
  *  - NOIR never proposes uninstalling a user app. Those become REVIEW, because
- *    "WeChat uploads a lot" is not a reason to uninstall WeChat.
+ *    "WeChat uploads a lot" is not a reason to uninstall WeChat. Only an explicit
+ *    `noir auto --apply --aggressive` acts on REVIEW items for user apps.
  */
 object Advisor {
 
