@@ -75,43 +75,47 @@ object Guidance {
     }
 
     fun deviceGuide(): String = """
-        |╭─ 没有检测到设备 ──────────────────────────────────────────────╮
+        |╭─ No device detected ──────────────────────────────────────────╮
         |│                                                              │
-        |│  1. 打开开发者模式                                           │
-        |│     小米 / HyperOS：设置 → 我的设备 → 全部参数 → 连点「MIUI 版本」7 次
-        |│     原生 Android：设置 → 关于手机 → 连点「版本号」7 次        │
+        |│  1. Turn on developer mode                                   │
+        |│     Xiaomi / HyperOS: Settings → My device → All specs       │
+        |│       → tap "MIUI version" 7 times                           │
+        |│     Stock Android: Settings → About phone                    │
+        |│       → tap "Build number" 7 times                           │
         |│                                                              │
-        |│  2. 开启 USB 调试                                            │
-        |│     设置 → 系统 → 开发者选项 → USB 调试                      │
-        |│     Xiaomi 额外开启：USB 调试（安全设置）                     │
+        |│  2. Turn on USB debugging                                    │
+        |│     Settings → System → Developer options → USB debugging    │
+        |│     Xiaomi only: also turn on                                │
+        |│       USB debugging (Security settings)                      │
         |│                                                              │
-        |│  3. 插线后手机会弹「允许 USB 调试吗？」                       │
-        |│     勾选「一律允许使用这台计算机进行调试」→ 允许              │
+        |│  3. After plugging in, the phone asks "Allow USB debugging?" │
+        |│     Check "Always allow from this computer" → Allow          │
         |│                                                              │
-        |│  4. 还不行就换一根数据线（很多线只能充电）                    │
+        |│  4. Still not working? Try another cable                     │
+        |│     (many cables are charge-only)                            │
         |╰──────────────────────────────────────────────────────────────╯
     """.trimMargin()
 
     fun unauthorizedGuide(): String = """
-        |设备已连接，但没有授权。
+        |The device is connected but not authorized.
         |
-        |  • 看手机屏幕：应该有一个「允许 USB 调试吗？」的弹窗
-        |  • 没弹窗：开发者选项 → 撤销 USB 调试授权 → 重新插拔
-        |  • 仍不行：开发者选项 → 关闭再打开 USB 调试
+        |  • Check the phone screen: there should be an "Allow USB debugging?" prompt
+        |  • No prompt: Developer options → Revoke USB debugging authorizations → unplug and replug
+        |  • Still nothing: Developer options → turn USB debugging off and on again
     """.trimMargin()
 
     fun adbMissing(): String = """
-        |  • macOS：brew install --cask android-platform-tools
-        |  • Windows：scoop install adb  或  https://developer.android.com/tools/releases/platform-tools
-        |  • Debian/Ubuntu：sudo apt install adb
-        |  • 或者让 NOIR 自己下载：noir setup
+        |  • macOS: brew install --cask android-platform-tools
+        |  • Windows: scoop install adb  or  https://developer.android.com/tools/releases/platform-tools
+        |  • Debian/Ubuntu: sudo apt install adb
+        |  • Or let NOIR download it for you: noir setup
     """.trimMargin()
 
     fun jadxMissing(): String = """
-        |  • macOS：brew install jadx
-        |  • Windows：scoop install jadx
-        |  • Debian/Ubuntu：apt install jadx
-        |  • 或者让 NOIR 自己下载：noir setup
+        |  • macOS: brew install jadx
+        |  • Windows: scoop install jadx
+        |  • Debian/Ubuntu: apt install jadx
+        |  • Or let NOIR download it for you: noir setup
     """.trimMargin()
 
     fun error(title: String, hint: String? = null): String {
