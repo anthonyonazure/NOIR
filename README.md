@@ -15,53 +15,55 @@
 ![platforms](https://img.shields.io/badge/platforms-macOS%20%7C%20Windows%20%7C%20Linux-2ea44f)
 [![AtomGit](https://img.shields.io/badge/AtomGit-Verlintas%2FNOIR-2f81f7)](https://atomgit.com/Verlintas/NOIR)
 
-**把「这台手机到底能泄露什么」变成一份可复现的报告。**
+**Turn "what can this phone actually leak?" into a reproducible report.**
 
-NOIR 是一个跑在电脑上的审计工具，通过 `adb` 读取已连接 Android 设备的应用清单、权限和 APK 里的网络端点，给出分类、风险评分和可执行的处置建议。它也可以在需要时调用 `jadx` 对单个应用做反编译和关键字检索。
+NOIR is an audit tool that runs on your computer. Over `adb`, it reads the app list, permissions, and network endpoints inside the APKs on a connected Android device, then gives you categories, risk scores, and actionable fixes. When needed, it can also call `jadx` to decompile a single app and search it for keywords.
 
-> 定位：**审计与自我防护**。面向自己的设备、自己的应用、已授权的安全研究。
+> Purpose: **auditing and self-protection**. For your own devices, your own apps, and authorized security research.
 
-**官网 / Website:** https://verlintas.dev/noir/ · [中文](https://verlintas.dev/noir/zh/)
+> This is an English translation of [Verlintas/NOIR](https://github.com/Verlintas/NOIR). The CLI output, labels, and docs have been translated from Chinese.
 
-**AtomGit 镜像 / Mirror:** https://atomgit.com/Verlintas/NOIR
+**Website:** https://verlintas.dev/noir/ · [中文](https://verlintas.dev/noir/zh/)
 
----
-
-## 它做什么
-
-1. **盘点**：列出所有「有网络权限 + 敏感权限」的应用，以及它们各自拿到了什么。
-2. **抽取端点**：在设备端用 `unzip + strings` 从每个 APK 的 dex 里提取 URL，只回传几 KB，不把整包拉回电脑。
-3. **分类与打分**：按包名和域名识别厂商（Xiaomi / Google / 腾讯 / 高德 …）与类别（遥测、广告、定位、输入法 …），结合权限和上报端点计算风险分。
-4. **数据关联**：把权限翻译成"能拿到什么数据"（位置/通讯录/短信/通话/麦克风/相机/屏幕/应用列表/设备标识/文件/日历/账号），再和上报域名配对，得出"哪类数据可能流向哪里"。
-5. **共享 UID**：识别 `android.uid.system` 这类共享用户，列出哪些包实际上共享同一套权限并集。
-6. **清单层**：解析 `AndroidManifest.xml` 二进制 AXML，找出没有权限保护的导出组件、明文流量、备份、debuggable、targetSdk。
-4. **给建议**：区分「可安全自动执行」「需人工确认」「不建议动」，并为每条动作生成回滚命令。
-5. **必要时深挖**：`deep` 会把单个 APK 拉到本地，用 `jadx` 反编译后检索 `Runtime.exec`、`setApplicationEnabledSetting`、`DexClassLoader`、`MediaProjection` 等高风险调用。
-
-## 它不做什么
-
-- 不联网、不上传任何数据、不需要账号。
-- 不修改系统分区，不需要 root。
-- 不会自动卸载任何东西，除非你显式加 `--aggressive`。
+**AtomGit mirror:** https://atomgit.com/Verlintas/NOIR
 
 ---
 
-## 第一次运行
+## What it does
+
+1. **Inventory:** lists every app that has network permission plus sensitive permissions, and what each one was granted.
+2. **Endpoint extraction:** runs `unzip + strings` on the device to pull URLs out of each APK's dex files. Only a few KB come back; the full APK is never copied to your computer.
+3. **Classification and scoring:** identifies the vendor (Xiaomi / Google / Tencent / Amap ...) and category (telemetry, ads, location, keyboard ...) from package and domain names, then calculates a risk score from permissions and reporting endpoints.
+4. **Data mapping:** translates permissions into "what data it can get" (location / contacts / SMS / call log / mic / camera / screen / app list / device IDs / files / calendar / accounts), then pairs that with reporting domains to show "which data may flow where."
+5. **Shared UID:** detects shared users like `android.uid.system` and lists which packages actually share the same combined permission set.
+6. **Manifest layer:** parses the binary AXML `AndroidManifest.xml` to find exported components with no permission protection, cleartext traffic, backup, debuggable, and targetSdk.
+7. **Recommendations:** sorts actions into "safe to auto-run," "needs manual review," and "don't touch," and generates a rollback command for each.
+8. **Deep dive when needed:** `deep` pulls a single APK locally, decompiles it with `jadx`, and searches for high-risk calls like `Runtime.exec`, `setApplicationEnabledSetting`, `DexClassLoader`, and `MediaProjection`.
+
+## What it doesn't do
+
+- No internet access, no data uploads, no account needed.
+- Doesn't modify the system partition, no root required.
+- Never auto-uninstalls anything unless you explicitly add `--aggressive`.
+
+---
+
+## First run
 
 ```bash
 noir
 ```
 
-不带参数会进入向导：
+With no arguments it starts a wizard:
 
-1. 检查 `adb`，没有就**问你要不要自动下载**（`~/.noir/tools`）
-2. 检查设备，没有就打印**开发者模式 / USB 调试的开通步骤**，然后**等你插线**（最多 180 秒）
-3. 问一句「开始扫描?」，扫完直接出仪表盘
-4. 问一句「执行这 19 条安全处置?」，`y` 就执行，并写好回滚文件
+1. Checks for `adb`. If missing, it **asks whether to auto-download it** (to `~/.noir/tools`)
+2. Checks for a device. If none, it prints **steps to enable developer mode / USB debugging**, then **waits for you to plug in** (up to 180 seconds)
+3. Asks "Start scan?" and shows the dashboard when done
+4. Asks "Apply these 19 safe fixes?" Answer `y` and it runs them and writes a rollback file
 
-全程只会问两三个 y/n，其余都是自动的。
+You only answer two or three y/n questions. Everything else is automatic.
 
-## 环境自检
+## Environment check
 
 ```bash
 noir doctor
@@ -78,51 +80,55 @@ NOIR doctor
 ```
 
 ```bash
-noir setup          # 缺什么下什么
-noir setup --yes    # 不询问，适合脚本
+noir setup          # download whatever is missing
+noir setup --yes    # no prompts, good for scripts
 ```
 
-## 出现问题时
+## When something goes wrong
 
-所有错误都会带「怎么办」，而不是抛异常栈：
+Every error tells you what to do instead of dumping a stack trace:
 
 ```
 ╭─ ERROR ──────────────────────────────────────────────────────────╮
-│ 指定的 adb 不存在：/nonexistent/adb                              │
+│ The specified adb does not exist: /nonexistent/adb              │
 ├──────────────────────────────────────────────────────────────────┤
-│ 检查路径，或运行 noir setup 自动安装。                           │
+│ Check the path, or run noir setup to install it automatically.   │
 ╰──────────────────────────────────────────────────────────────────╯
 ```
 
-没有设备时给出的是可执行步骤：
+With no device, you get actionable steps:
 
 ```
-╭─ 没有检测到设备 ──────────────────────────────────────────────╮
-│  1. 打开开发者模式                                           │
-│     小米 / HyperOS：设置 → 我的设备 → 全部参数 → 连点「MIUI 版本」7 次
-│  2. 开启 USB 调试：设置 → 系统 → 开发者选项 → USB 调试        │
-│  3. 插线后手机弹「允许 USB 调试吗？」→ 勾选「一律允许」        │
-│  4. 还不行就换一根数据线（很多线只能充电）                    │
+╭─ No device detected ──────────────────────────────────────────╮
+│  1. Turn on developer mode                                   │
+│     Xiaomi / HyperOS: Settings → My device → All specs       │
+│     → tap "MIUI version" 7 times                             │
+│  2. Turn on USB debugging: Settings → System →               │
+│     Developer options → USB debugging                        │
+│  3. Plug in; when the phone asks "Allow USB debugging?"      │
+│     check "Always allow"                                     │
+│  4. Still not working? Try another cable (many are           │
+│     charge-only)                                             │
 ╰──────────────────────────────────────────────────────────────╯
 ```
 
-已连接但没授权时，会单独提示「撤销 USB 调试授权后重插」。
+If the device is connected but not authorized, it separately tells you to "revoke USB debugging authorizations and reconnect."
 
-## 支持平台
+## Supported platforms
 
-| 系统 | 状态 |
+| OS | Status |
 |---|---|
 | macOS (Intel / Apple Silicon) | ✅ |
 | Windows 10 / 11 | ✅ |
 | Debian / Ubuntu | ✅ |
 
-依赖：
+Dependencies:
 
 - **JDK 17+**
-- **Android platform-tools**（`adb`）
-- **jadx**（仅 `deep` 命令需要）
+- **Android platform-tools** (`adb`)
+- **jadx** (only needed for the `deep` command)
 
-程序会自动在常见安装位置查找 `adb` 和 `jadx`；找不到时可以用 `--adb` / `--jadx` 指定。
+NOIR looks for `adb` and `jadx` in common install locations automatically. If it can't find them, point to them with `--adb` / `--jadx`.
 
 ```bash
 # macOS
@@ -138,11 +144,11 @@ scoop install adb jadx
 
 ---
 
-## 安装
+## Install
 
-**方式一：下载即用（推荐）**
+**Option 1: download and run (recommended)**
 
-到 [Releases](https://github.com/Verlintas/NOIR/releases) 下载对应平台的 portable 包：
+Grab the portable package for your platform from [Releases](https://github.com/Verlintas/NOIR/releases):
 
 ```
 noir-v0.1.1-macOS-portable.zip
@@ -151,42 +157,44 @@ noir-v0.1.1-Linux-portable.zip
 SHA256SUMS.txt
 ```
 
-解压后**双击启动器**即可，包内自带运行时，**不需要安装 Java**：
+Unzip and **double-click the launcher**. A runtime is bundled, so **you don't need Java installed**:
 
-| 系统 | 双击这个 | 如果被拦 |
+| OS | Double-click | If blocked |
 |---|---|---|
-| macOS | `Start NOIR.command` | 右键 → 打开；或 `xattr -dr com.apple.quarantine "Start NOIR.command" NOIR.app` |
-| Windows | `Start NOIR.bat` | SmartScreen → 更多信息 → 仍要运行（批处理会切到 UTF-8 并调用包内 JRE） |
-| Linux | `Start-NOIR.sh` | 先 `chmod +x Start-NOIR.sh`，或在终端执行 |
+| macOS | `Start NOIR.command` | Right-click → Open; or `xattr -dr com.apple.quarantine "Start NOIR.command" NOIR.app` |
+| Windows | `Start NOIR.bat` | SmartScreen → More info → Run anyway (the batch file switches to UTF-8 and uses the bundled JRE) |
+| Linux | `Start-NOIR.sh` | Run `chmod +x Start-NOIR.sh` first, or start it from a terminal |
 
-启动器会打开一个终端窗口跑完向导，并在结束时停住（不会一闪而过）。
+The launcher opens a terminal window, runs the wizard, and pauses at the end so it doesn't just flash and close.
 
-`adb` 和 `jadx` 不在包里——首次运行会询问是否自动下载到 `~/.noir/tools`。
+`adb` and `jadx` aren't included in the package. On first run it asks whether to download them to `~/.noir/tools`.
 
-**方式二：从源码构建**
+> Note: the prebuilt Releases come from the upstream Chinese project. To get the English version, build from source (option 2).
+
+**Option 2: build from source**
 
 ```bash
-git clone https://github.com/Verlintas/NOIR
+git clone https://github.com/anthonyonazure/NOIR
 cd NOIR
 ./gradlew :cli:installDist
 ./cli/build/install/noir/bin/noir --about
 ```
 
-## 构建
+## Build
 
 ```bash
 git clone <repo> && cd NOIR
 ./gradlew :cli:installDist
 ```
 
-产物：
+Output:
 
 ```
 cli/build/install/noir/bin/noir        # macOS / Linux
 cli/build/install/noir/bin/noir.bat    # Windows
 ```
 
-也可以直接：
+Or run directly:
 
 ```bash
 ./gradlew :cli:run --args="devices"
@@ -194,100 +202,100 @@ cli/build/install/noir/bin/noir.bat    # Windows
 
 ---
 
-## 界面
+## Interface
 
 ![NOIR dashboard on a Xiaomi 17 Pro Max](docs/screenshot.png)
 
-真机输出（macOS Terminal）：渐变 logo、CJK 对齐的表格、按风险着色的分数、
-每处理完一个 APK 就刷新一次的进度条。
+Real-device output (macOS Terminal): gradient logo, CJK-aligned tables, risk-colored scores,
+and a progress bar that updates after each APK.
 
-`noir ui` 会把结果渲染成一块等宽仪表盘；颜色和边框都会按终端能力自动降级：
+`noir ui` renders results as a monospace dashboard. Colors and borders downgrade automatically based on what your terminal supports:
 
-- `--ascii`：纯 ASCII 边框，给旧版 Windows 控制台
-- `--no-color` / `--color`：关闭或强制 ANSI 颜色（默认按是否为 TTY 自动判断）
-- `--quiet`：只留仪表盘，不打印扫描过程
-- `--no-clear`：不清屏（方便把输出重定向到文件）
+- `--ascii`: plain ASCII borders, for old Windows consoles
+- `--no-color` / `--color`: turn off or force ANSI color (default: auto, based on whether output is a TTY)
+- `--quiet`: dashboard only, no scan progress
+- `--no-clear`: don't clear the screen (handy when redirecting output to a file)
 
-## 用法
+## Usage
 
 ```bash
-noir --about              # 它是什么、会写什么、许可
+noir --about              # what it is, what it writes, license
 noir --version
 noir devices
-noir scan                 # 全量扫描，输出 JSON / Markdown / 域名清单
-noir ui                   # 扫描并渲染仪表盘
-noir auto                 # 扫描 + 分类 + 生成处置计划（dry-run）
-noir auto --apply         # 执行安全的 appops 动作（可回滚）
-noir auto --apply --aggressive   # 额外卸载被标记的用户应用
-noir deep com.example.app # 拉包 + jadx + 关键字检索
-noir block com.example.app        # 打印处置命令
+noir scan                 # full scan, outputs JSON / Markdown / domain lists
+noir ui                   # scan and render the dashboard
+noir auto                 # scan + classify + build a fix plan (dry run)
+noir auto --apply         # run safe appops actions (reversible)
+noir auto --apply --aggressive   # also uninstall flagged user apps
+noir deep com.example.app # pull APK + jadx + keyword search
+noir block com.example.app        # print fix commands
 noir block com.example.app --apply
 ```
 
-常用参数：
+Common options:
 
-| 参数 | 说明 |
+| Option | Meaning |
 |---|---|
-| `--serial <id>` | 指定设备 |
-| `--out <dir>` | 输出目录（默认 `noir-out`） |
-| `--min <score>` | 只保留分数 ≥ N 的应用 |
-| `--limit <n>` | 最多输出 N 条 |
-| `--only <regex>` | 只扫描匹配的包名，例如 `--only 'com\.miui\.'` |
-| `--adb <path>` / `--jadx <path>` | 手动指定工具路径 |
-| `--yes` | 自动化场景下跳过确认 |
+| `--serial <id>` | Target a specific device |
+| `--out <dir>` | Output folder (default `noir-out`) |
+| `--min <score>` | Only keep apps scoring ≥ N |
+| `--limit <n>` | Output at most N entries |
+| `--only <regex>` | Only scan matching package names, e.g. `--only 'com\.miui\.'` |
+| `--adb <path>` / `--jadx <path>` | Set tool paths manually |
+| `--yes` | Skip confirmations in automated runs |
 
-## DeepScan：一条命令反编译 + 处置
-
-```bash
-noir deepscan                  # 反编译风险最高的 15 个应用
-noir deepscan --top 30         # 更多
-noir deepscan --all            # 全部被标记应用（慢，占磁盘）
-noir deepscan --jobs 4         # 并行 jadx 数量
-```
-
-流程是：扫描 → 按风险排序 → 逐个 `adb pull` + `jadx` → 统计代码级信号
-（`Runtime.exec`、`DexClassLoader`、`setApplicationEnabledSetting`、
-`enabled_accessibility_services`、`MediaProjection`、`SystemProperties.set`、
-短信/设备标识、WebView 桥、无障碍/通知监听/设备管理员 …）→ 解析清单
-（导出组件、明文流量、备份、debuggable）→ 识别 SDK（Umeng/Firebase/AppsFlyer…）
-→ 输出 `deepscan.md` / `deepscan.tsv` → 询问是否清理。
+## DeepScan: decompile and fix in one command
 
 ```bash
-noir deepscan --apply          # 分析后执行安全 appops
-noir deepscan --apply --purge  # 再逐个确认卸载高风险用户应用
+noir deepscan                  # decompile the 15 highest-risk apps
+noir deepscan --top 30         # more
+noir deepscan --all            # every flagged app (slow, uses a lot of disk)
+noir deepscan --jobs 4         # number of parallel jadx jobs
 ```
 
-反编译结果按 `包名 + APK 路径` 缓存，第二次跑同一个应用会直接复用。
+The flow: scan → sort by risk → `adb pull` + `jadx` each one → count code-level signals
+(`Runtime.exec`, `DexClassLoader`, `setApplicationEnabledSetting`,
+`enabled_accessibility_services`, `MediaProjection`, `SystemProperties.set`,
+SMS / device IDs, WebView bridges, accessibility / notification listener / device admin ...) → parse the manifest
+(exported components, cleartext traffic, backup, debuggable) → identify SDKs (Umeng / Firebase / AppsFlyer ...)
+→ write `deepscan.md` / `deepscan.tsv` → ask whether to clean up.
 
-## 输出
+```bash
+noir deepscan --apply          # run safe appops after analysis
+noir deepscan --apply --purge  # then confirm uninstalls of high-risk user apps one by one
+```
+
+Decompiled results are cached by `package name + APK path`, so a second run on the same app reuses them.
+
+## Output
 
 ```
 noir-out/
-├── report.json               # 结构化结果（应用、权限、端点、建议）
-├── report.md                 # 人类可读报告
-├── domains-trackers.txt      # 统计/广告/崩溃上报，可整份导入
-├── domains-other.txt         # 用途不明，导入前逐条判断
-├── domains-functional.txt    # 推送/登录/更新/支付/商店/云同步，禁止拦截
-├── domains.txt               # 等于 trackers（兼容旧脚本）
-├── plan.txt                  # 本次可执行的 appops
-├── applied.txt               # 实际执行的命令、退出码、完整 stdout/stderr
-└── rollback.txt              # 回滚命令（成功后写入修改前的 AppOps 模式）
+├── report.json               # structured results (apps, permissions, endpoints, recommendations)
+├── report.md                 # human-readable report
+├── domains-trackers.txt      # analytics / ads / crash reporting, safe to import whole
+├── domains-other.txt         # unclear purpose, review each before importing
+├── domains-functional.txt    # push / login / updates / payments / store / cloud sync, do NOT block
+├── domains.txt               # same as trackers (for old scripts)
+├── plan.txt                  # appops actions available this run
+├── applied.txt               # commands actually run, exit codes, full stdout/stderr
+└── rollback.txt              # rollback commands (pre-change AppOps modes, written on success)
 ```
 
-## 隐私
+## Privacy
 
-- 工具本身**不联网**：没有遥测、没有版本检查、没有崩溃上报
-- 扫描结果只写在你指定的 `--out` 目录
-- 唯一的外部请求发生在 `noir setup`（下载 adb/jadx）和 `noir deep`（jadx 是本地进程）
-- 报告里可能包含你设备上的包名和端点，分享前自行检查
+- The tool itself **never goes online**: no telemetry, no update checks, no crash reporting
+- Scan results are only written to the `--out` folder you choose
+- The only external requests happen in `noir setup` (downloading adb/jadx). `noir deep` runs jadx as a local process
+- Reports may contain package names and endpoints from your device. Review them before sharing
 
-## 缓存
+## Cache
 
-扫描结果按 `包名 + APK 路径` 缓存在 `~/.noir/endpoints.tsv`。应用更新后路径变化会自动重新分析，重复扫描通常只需几秒。
+Scan results are cached by `package name + APK path` in `~/.noir/endpoints.tsv`. When an app updates, its path changes and it gets re-analyzed automatically. Repeat scans usually take a few seconds.
 
 ---
 
-## 架构
+## Architecture
 
 ```
 adb ──▶ pm / dumpsys ──▶ Dumpsys parser ──┐
@@ -304,66 +312,66 @@ adb ──▶ unzip/strings ──▶ endpoints ──────┘        │
                                                  Tui / CLI
 ```
 
-`deep` 走另一条支线：`adb pull` → `jadx` → 源码 grep。
+`deep` takes a separate path: `adb pull` → `jadx` → grep the source.
 
-## 设计取舍
+## Design tradeoffs
 
-- **端点抽取在设备端完成**：`adb shell` 内跑 `unzip | strings | grep`，避免把几百个 APK 拉回电脑。设备缺少 `unzip`/`strings` 时自动退化为本地解析。
-- **共享 UID 特殊处理**：Android 上 `android.uid.system` 下的应用（常见 50+ 个）权限记录在 `dumpsys package` 尾部的 `Shared users` 段。解析器会把这些权限合并回每个包，否则最该被看见的应用反而会消失。
-- **建议分级**：只有 appops 级别的动作标记为可自动执行；卸载必须显式开启。
-- **无遥测**：程序不包含任何上报逻辑。
+- **Endpoint extraction happens on the device:** runs `unzip | strings | grep` inside `adb shell` to avoid pulling hundreds of APKs to the computer. If the device lacks `unzip`/`strings`, it falls back to local parsing.
+- **Shared UID handling:** on Android, apps under `android.uid.system` (often 50+) have their permissions recorded in the `Shared users` section at the end of `dumpsys package`. The parser merges those back into each package; otherwise the apps you most need to see would disappear.
+- **Tiered recommendations:** only appops-level actions are marked as auto-runnable. Uninstalling must be turned on explicitly.
+- **No telemetry:** the program contains no reporting code.
 
-## 常见问题
+## FAQ
 
-**需要 root 吗？**
-不需要。全部通过 `adb` 的 shell 权限完成；卸载只是 `--user 0` 级别，APK 仍在系统分区。
+**Does it need root?**
+No. Everything runs with `adb` shell permissions. Uninstalls are only `--user 0` level; the APK stays on the system partition.
 
-**会改坏手机吗？**
-默认完全只读。`--apply` 只改 app-ops；执行前会查询原模式，成功执行的动作会写入
-`rollback.txt`，按记录恢复。完整 stdout/stderr 和退出码写入 `applied.txt`。
-`noir block` 的卸载也会先打印 `pm install-existing` 的恢复命令。
+**Can it break my phone?**
+It's fully read-only by default. `--apply` only changes app-ops. It checks the original mode before running, and successful actions are written to
+`rollback.txt` so you can restore them. Full stdout/stderr and exit codes go to `applied.txt`.
+Uninstalls through `noir block` also print the `pm install-existing` restore command first.
 
-**为什么有些应用只给"人工复核"？**
-系统应用不能真正卸载（`--user 0` 卸载也会被 OTA 或恢复出厂装回来），所以只建议
-app-ops 或 DNS 层拦截。
+**Why do some apps only get "Manual review"?**
+System apps can't truly be uninstalled (a `--user 0` uninstall gets put back by an OTA update or factory reset), so it only suggests
+app-ops or DNS-level blocking.
 
-**DNS 拦截为什么只导出不执行？**
-跨平台改 DNS 很容易把设备网断掉（我们在开发中踩过），所以只导出清单：
+**Why are DNS blocks only exported, not applied?**
+Changing DNS across platforms can easily knock a device offline (we hit this during development), so it only exports lists:
 
-- `domains-trackers.txt` —— 统计/广告/崩溃上报，可以整份导入
-- `domains-other.txt` —— 用途不明，导入前逐条判断
-- `domains-functional.txt` —— 推送、登录、更新、支付、应用商店、云同步，**拦了会掉功能**
-- `domains.txt` —— 现在只包含 trackers，兼容旧脚本
+- `domains-trackers.txt`: analytics / ads / crash reporting, safe to import whole
+- `domains-other.txt`: unclear purpose, review each before importing
+- `domains-functional.txt`: push, login, updates, payments, app stores, cloud sync. **Blocking these breaks features**
+- `domains.txt`: now contains only trackers, for old scripts
 
-IP、`localhost` 和带 `test`/`staging` 的域名会被自动剔除。
+IPs, `localhost`, and domains containing `test`/`staging` are removed automatically.
 
-**支持 iOS 吗？**
-不支持。`core` 是按 Kotlin Multiplatform 组织的，但审计逻辑依赖 Android 的
-`dumpsys` 和 APK 格式。
+**iOS support?**
+No. `core` is organized as Kotlin Multiplatform, but the audit logic depends on Android's
+`dumpsys` and the APK format.
 
-## 参与
+## Contributing
 
-- [CONTRIBUTING.md](CONTRIBUTING.md) — 构建、测试、规则放在哪
-- [SECURITY.md](SECURITY.md) — 漏洞报告方式（请不要开公开 issue）
-- [Issues](https://github.com/Verlintas/NOIR/issues) — bug 请附上 `noir doctor` 输出
+- [CONTRIBUTING.md](CONTRIBUTING.md): building, testing, where the rules live
+- [SECURITY.md](SECURITY.md): how to report vulnerabilities (please don't open a public issue)
+- [Issues](https://github.com/Verlintas/NOIR/issues): for bugs, include your `noir doctor` output
 
-## 路线图
+## Roadmap
 
-- [x] 等宽仪表盘（`noir ui`）
-- [x] DeepScan（批量反编译 + 代码级信号）
-- [x] 自带运行时的双击即用包（jpackage）
-- [ ] 图形界面（Compose Multiplatform）
-- [ ] 规则文件可配置（YAML），支持社区规则包
-- [ ] 与 `apktool` / `jadx` 的批量流水线
-- [ ] 设备端 DNS/VPN 拦截方案导出
-- [ ] 扫描结果签名与版本对比
+- [x] Monospace dashboard (`noir ui`)
+- [x] DeepScan (batch decompile + code-level signals)
+- [x] Double-click packages with a bundled runtime (jpackage)
+- [ ] GUI (Compose Multiplatform)
+- [ ] Configurable rule files (YAML), with community rule packs
+- [ ] Batch pipeline with `apktool` / `jadx`
+- [ ] Export of on-device DNS/VPN blocking setups
+- [ ] Signed scan results and version comparison
 
-## 免责声明
+## Disclaimer
 
-NOIR 只应用于**你自己的设备**，或你获得明确授权的设备。它给出的是静态证据
-（"这个应用具备这个能力，并且代码里有这个端点"），**不能证明**某次具体传输发生过。
-请结合网络层证据自行判断。
+Use NOIR only on **your own devices** or devices you're explicitly authorized to test. It provides static evidence
+("this app has this capability, and this endpoint is in its code"). It **can't prove** that any specific transmission happened.
+Combine it with network-layer evidence to draw your own conclusions.
 
-## 许可
+## License
 
 MIT © 2026 Verlintas
