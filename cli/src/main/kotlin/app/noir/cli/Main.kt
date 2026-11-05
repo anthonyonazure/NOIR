@@ -303,12 +303,24 @@ private fun cmdAuto(raw: List<String>) {
     println()
     println("== Will apply (${planned.size} actions, all reversible) ==")
     planned.forEach { println("  ${it.setCommand(result.meta.user)}") }
+
+    val aggressive = args.flag("aggressive")
+    val toUninstall = if (aggressive) flaggedUserApps(result, recommendations) else emptyList()
+    if (aggressive) {
+        println()
+        println("== --aggressive: will uninstall ${toUninstall.size} flagged user apps (reversible) ==")
+        if (toUninstall.isEmpty()) println("  (none)")
+        toUninstall.forEach { println("  $it") }
+    }
     println()
     println(Tui.clip("[+] ${result.outDir.absolutePath}"))
 
     if (!args.flag("apply")) {
         println()
         println("[*] dry run: add --apply to run these ${planned.size} actions")
+        if (aggressive && toUninstall.isNotEmpty()) {
+            println("[*] --aggressive only uninstalls together with --apply")
+        }
         return
     }
 
@@ -317,14 +329,66 @@ private fun cmdAuto(raw: List<String>) {
             println("[!] --apply in a non-interactive environment also requires --yes")
             return
         }
-        print("Apply ${planned.size} appops actions? [y/N] ")
+        val extra = if (toUninstall.isNotEmpty()) " (you'll confirm each of the ${toUninstall.size} uninstalls next)" else ""
+        print("Apply ${planned.size} appops actions$extra? [y/N] ")
         val answer = readLine()?.trim()?.lowercase()
         if (answer != "y" && answer != "yes") {
             println("aborted")
             return
         }
     }
-    applyCommands(connectAdb(args), result, planned)
+    val adb = connectAdb(args)
+    applyCommands(adb, result, planned)
+
+    if (aggressive && toUninstall.isNotEmpty()) {
+        println()
+        println("== Uninstall flagged user apps ==")
+        uninstallApps(adb, result.device.serial, result.outDir, toUninstall, askEach = !args.flag("yes"))
+    }
+}
+
+/**
+ * User-installed (non-system) apps the advisor flagged for heavy telemetry or ads.
+ * System apps are never included: they can't really be removed and OTA updates put them back.
+ */
+private fun flaggedUserApps(result: ScanResult, recommendations: List<Recommendation>): List<String> {
+    val userApps = result.apps.filter { !it.isSystem }.map { it.pkg }.toSet()
+    return recommendations
+        .filter { it.action == ActionType.REVIEW && it.pkg in userApps }
+        .map { it.pkg }
+        .distinct()
+}
+
+private val PACKAGE_NAME = Regex("^[A-Za-z][A-Za-z0-9_]*(\\.[A-Za-z0-9_]+)+$")
+
+/**
+ * Uninstalls apps for user 0 (the APK stays on the phone, so it can be restored),
+ * asking per app when [askEach] is true, and records a restore command for every
+ * app that was removed in uninstall-rollback.txt.
+ */
+private fun uninstallApps(adb: Adb, serial: String, outDir: File, pkgs: List<String>, askEach: Boolean) {
+    val restore = ArrayList<String>()
+    pkgs.forEach { pkg ->
+        if (!PACKAGE_NAME.matches(pkg)) {
+            println("  %-44s %s".format(pkg, "skipped (not a valid package name)"))
+            return@forEach
+        }
+        if (askEach) {
+            print("  Uninstall $pkg? [y/N] ")
+            val answer = readLine()?.trim()?.lowercase()
+            if (answer != "y" && answer != "yes") return@forEach
+        }
+        val result = adb.shell(serial, "pm uninstall --user 0 $pkg")
+        val ok = result.ok && result.output.contains("Success")
+        println("  %-44s %s".format(pkg, if (ok) "uninstalled" else "failed (${result.code}) ${result.output.trim().take(80)}"))
+        if (ok) restore += "adb -s $serial shell pm install-existing --user 0 $pkg"
+    }
+    if (restore.isEmpty()) return
+    outDir.mkdirs()
+    val file = File(outDir, "uninstall-rollback.txt")
+    val header = if (file.exists()) "" else "# NOIR uninstall rollback: run any line to put that app back\n"
+    file.appendText(header + restore.joinToString("\n", postfix = "\n"))
+    println("[*] restore commands: ${file.absolutePath}")
 }
 
 private fun cmdUi(raw: List<String>) {
@@ -347,6 +411,9 @@ private fun cmdDeep(raw: List<String>) {
     val args = Args(raw)
     val pkg = args.positional.firstOrNull()
         ?: throw NoirException("Missing package name.", "Usage: noir deep <package> [--serial S] [--out DIR]")
+    if (!PACKAGE_NAME.matches(pkg)) {
+        throw NoirException("Not a valid package name: $pkg", "Package names look like com.example.app. Run noir scan to see them.")
+    }
 
     val adb = connectAdb(args)
     val device = awaitDevice(adb, args.value("serial"), interactive = isInteractive())
@@ -416,11 +483,30 @@ private fun cmdBlock(raw: List<String>) {
         return
     }
 
+    if (!args.flag("yes")) {
+        if (!isInteractive()) {
+            println("[!] --apply in a non-interactive environment also requires --yes")
+            return
+        }
+        println()
+        print("Uninstall and restrict ${pkgs.size} app(s) listed above? [y/N] ")
+        val answer = readLine()?.trim()?.lowercase()
+        if (answer != "y" && answer != "yes") {
+            println("Skipped.")
+            return
+        }
+    }
+
+    val outDir = File(args.value("out") ?: "noir-out")
     println()
-    actions.forEach { action ->
-        print("> $action ... ")
-        val result = adb.shell(device.serial, action)
-        println(if (result.ok) "ok" else "failed (${result.code}) ${result.output.trim().take(120)}")
+    uninstallApps(adb, device.serial, outDir, pkgs, askEach = false)
+    pkgs.filter { PACKAGE_NAME.matches(it) }.forEach { pkg ->
+        listOf("PROJECT_MEDIA", "GET_USAGE_STATS").forEach { op ->
+            val action = "cmd appops set $pkg $op ignore"
+            print("> $action ... ")
+            val result = adb.shell(device.serial, action)
+            println(if (result.ok) "ok" else "failed (${result.code}) ${result.output.trim().take(120)}")
+        }
     }
 }
 
@@ -458,7 +544,7 @@ private fun cmdSetup(raw: List<String>) {
             print("  Downloading ")
             val path = Setup.installJadx { read, total -> renderDownload(read, total) }
             println()
-            if (path == null) throw NoirException("jadx download failed.", "Check your network and try again.")
+            if (path == null) throw NoirException("jadx download failed.", "Check your network and try again. The download is also rejected if its checksum doesn't match the official release.")
             println("  jadx      $path")
         }
     }
@@ -561,6 +647,7 @@ private fun performScan(args: Args): ScanResult {
             }
         }
         if (!QUIET) println()
+        File(outDir, "work").deleteRecursively()
         missing.forEach { target -> Cache.put(target.pkg, target.path, fresh[target.pkg].orEmpty()) }
         Cache.flush()
         endpoints.putAll(fresh)
@@ -1125,16 +1212,13 @@ private fun offerCleanup(args: Args, adb: Adb, scan: ScanResult, findings: List<
     }
     println()
     println("== Uninstall high-risk user apps ==")
-    println("# Restore command: adb shell pm install-existing --user 0 <package>")
-    userHigh.forEach { f ->
-        if (!args.flag("yes") && isInteractive()) {
-            print("  Uninstall ${f.pkg}? [y/N] ")
-            val answer = readLine()?.trim()?.lowercase()
-            if (answer != "y" && answer != "yes") return@forEach
-        }
-        val result = adb.shell(scan.device.serial, "pm uninstall --user 0 ${f.pkg}")
-        println("  %-44s %s".format(f.pkg, if (result.ok) "uninstalled" else "failed (${result.code})"))
-    }
+    uninstallApps(
+        adb,
+        scan.device.serial,
+        scan.outDir,
+        userHigh.map { it.pkg },
+        askEach = !args.flag("yes") && isInteractive()
+    )
 }
 
 // ── plumbing ───────────────────────────────────────────────────────────────
