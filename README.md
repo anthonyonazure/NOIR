@@ -44,7 +44,8 @@ NOIR is an audit tool that runs on your computer. Over `adb`, it reads the app l
 
 - No internet access, no data uploads, no account needed.
 - Doesn't modify the system partition, no root required.
-- Never auto-uninstalls anything unless you explicitly add `--aggressive`.
+- Never auto-uninstalls anything unless you explicitly add `--aggressive` (and even then it asks before each app unless you also pass `--yes`).
+- Leaves nothing behind on the phone: its temporary files are wiped after every scan, even if you press Ctrl+C.
 
 ---
 
@@ -226,10 +227,10 @@ noir scan                 # full scan, outputs JSON / Markdown / domain lists
 noir ui                   # scan and render the dashboard
 noir auto                 # scan + classify + build a fix plan (dry run)
 noir auto --apply         # run safe appops actions (reversible)
-noir auto --apply --aggressive   # also uninstall flagged user apps
+noir auto --apply --aggressive   # also uninstall flagged user apps (asks per app)
 noir deep com.example.app # pull APK + jadx + keyword search
 noir block com.example.app        # print fix commands
-noir block com.example.app --apply
+noir block com.example.app --apply   # asks once, then saves restore commands
 ```
 
 Common options:
@@ -279,7 +280,8 @@ noir-out/
 ├── domains.txt               # same as trackers (for old scripts)
 ├── plan.txt                  # appops actions available this run
 ├── applied.txt               # commands actually run, exit codes, full stdout/stderr
-└── rollback.txt              # rollback commands (pre-change AppOps modes, written on success)
+├── rollback.txt              # rollback commands (pre-change AppOps modes, written on success)
+└── uninstall-rollback.txt    # one restore command per app NOIR uninstalled (only if any were)
 ```
 
 ## Privacy
@@ -288,6 +290,9 @@ noir-out/
 - Scan results are only written to the `--out` folder you choose
 - The only external requests happen in `noir setup` (downloading adb/jadx). `noir deep` runs jadx as a local process
 - Reports may contain package names and endpoints from your device. Review them before sharing
+- Nothing is left on the phone. The scan pushes a small script and app list to `/data/local/tmp`, and deletes them (plus any leftovers from an interrupted earlier run) when the scan ends, fails, or is cancelled with Ctrl+C
+- Temporary files on your computer (the scan script and any APKs pulled for the fallback scan) are deleted as soon as they're used. What stays is the report folder, the endpoint cache in `~/.noir/`, and, for `deep`/`deepscan`, the APKs and decompiled sources you asked for
+- Downloads only follow HTTPS links. The jadx download is checked against the official SHA-256 fingerprint, and archives are unpacked with a guard that blocks files from escaping the tools folder
 
 ## Cache
 
@@ -329,7 +334,7 @@ No. Everything runs with `adb` shell permissions. Uninstalls are only `--user 0`
 **Can it break my phone?**
 It's fully read-only by default. `--apply` only changes app-ops. It checks the original mode before running, and successful actions are written to
 `rollback.txt` so you can restore them. Full stdout/stderr and exit codes go to `applied.txt`.
-Uninstalls through `noir block` also print the `pm install-existing` restore command first.
+Every uninstall (`--aggressive`, `--purge`, or `noir block`) writes its `pm install-existing` restore command to `uninstall-rollback.txt`.
 
 **Why do some apps only get "Manual review"?**
 System apps can't truly be uninstalled (a `--user 0` uninstall gets put back by an OTA update or factory reset), so it only suggests
